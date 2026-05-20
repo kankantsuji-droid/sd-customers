@@ -355,13 +355,32 @@ const PER = 50;
 let selId = null;
 
 // 電話記録ソート・キャッシュ
-let logSortDesc = true;   // true=新しい順 false=古い順
+let logSortDesc = true;
 let currentLogs = [];
 let currentLogCid = null;
+const logCache = new Map(); // cid → logs（メモリキャッシュ）
 // 電話記録一覧
 let allLogsData = [];
 let allLogSortDesc = true;
 let allLogQ = '';
+
+// ── ローカルキャッシュ（顧客リスト） ─────────────────
+const CACHE_KEY = 'sd_custs_v1';
+function loadLocalCache() {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const { data, ts } = JSON.parse(raw);
+    if (Date.now() - ts > 10 * 60 * 1000) return null; // 10分で失効
+    return data;
+  } catch { return null; }
+}
+function saveLocalCache(data) {
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify({ data, ts: Date.now() })); } catch {}
+}
+function clearLocalCache() {
+  try { localStorage.removeItem(CACHE_KEY); } catch {}
+}
 
 // ── API ──────────────────────────────────────────
 
@@ -391,10 +410,26 @@ async function apiPost(action, body) {
 
 // ── Init ─────────────────────────────────────────
 async function init() {
+  const cached = loadLocalCache();
+  if (cached) {
+    // キャッシュがあれば即表示し、バックグラウンドで最新データを取得
+    allCusts = cached;
+    applySearch(document.getElementById('search').value);
+    api({ action: 'getCustomers', _t: Date.now() })
+      .then(d => {
+        allCusts = Array.isArray(d) ? d : (d.data || []);
+        saveLocalCache(allCusts);
+        applySearch(document.getElementById('search').value);
+      })
+      .catch(() => {});
+    return;
+  }
+  // キャッシュなし：スピナーを表示して待機
   document.getElementById('clist').innerHTML = '<div class="spin">読み込み中…</div>';
   try {
     const d = await api({ action: 'getCustomers', _t: Date.now() });
     allCusts = Array.isArray(d) ? d : (d.data || []);
+    saveLocalCache(allCusts);
     applySearch(document.getElementById('search').value);
   } catch(e) {
     document.getElementById('clist').innerHTML = '<div class="none-msg" style="color:#dc2626">取得失敗。GAS URLを確認してください。</div>';
@@ -532,13 +567,19 @@ async function selectCustomer(id) {
 // ── Logs ─────────────────────────────────────────
 async function loadLogs(cid) {
   currentLogCid = cid;
+  // メモリキャッシュがあれば即表示
+  if (logCache.has(cid)) {
+    currentLogs = logCache.get(cid);
+    renderLogs(cid, currentLogs);
+  }
   try {
     const d = await api({ action: 'getLogs', customerId: cid, _t: Date.now() });
     currentLogs = Array.isArray(d) ? d : (d.data || []);
+    logCache.set(cid, currentLogs);
     renderLogs(cid, currentLogs);
   } catch {
     const el = document.getElementById('loglist');
-    if (el) el.innerHTML = '<div style="color:#dc2626;font-size:13px;padding:8px">記録の取得に失敗しました</div>';
+    if (el && !logCache.has(cid)) el.innerHTML = '<div style="color:#dc2626;font-size:13px;padding:8px">記録の取得に失敗しました</div>';
   }
 }
 
@@ -578,6 +619,7 @@ async function addLog(cid) {
     toast('記録を追加しました', 'ok');
     document.getElementById('log-memo').value = '';
     document.getElementById('log-dt').value = nowDT();
+    logCache.delete(cid);
     loadLogs(cid);
   } catch { toast('追加に失敗しました', 'err'); }
 }
@@ -587,6 +629,7 @@ async function deleteLog(lid, cid) {
   try {
     await api({ action: 'deleteLog', id: lid });
     toast('記録を削除しました', 'ok');
+    logCache.delete(cid);
     loadLogs(cid);
   } catch { toast('削除に失敗しました', 'err'); }
 }
@@ -638,6 +681,7 @@ async function saveCustomer() {
     toast(data.id ? '顧客情報を更新しました' : '顧客を追加しました', 'ok');
     closeModal();
     const newId = (res && res.id) ? res.id : data.id;
+    clearLocalCache();
     await init();
     if (newId) { selId = newId; selectCustomer(newId); }
   } catch { toast('保存に失敗しました', 'err'); }
@@ -651,6 +695,8 @@ async function deleteCustomer(id) {
     await api({ action: 'deleteCustomer', id });
     toast('顧客を削除しました', 'ok');
     selId = null;
+    logCache.delete(id);
+    clearLocalCache();
     document.getElementById('detail').style.display = 'none';
     document.getElementById('empty').style.display = 'flex';
     await init();
@@ -734,6 +780,8 @@ document.getElementById('csv-file').addEventListener('change', async e => {
 
     const msg = `インポート完了: 新規${added}件、更新${updated}件${failed ? `、失敗${failed}件` : ''}`;
     toast(msg, failed === total ? 'err' : 'ok');
+    clearLocalCache();
+    logCache.clear();
     await init();
 
   } catch(err) {
