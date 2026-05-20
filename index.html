@@ -1,0 +1,894 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SD 顧客管理</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Hiragino Kaku Gothic ProN', 'Hiragino Sans', Meiryo, sans-serif;
+      font-size: 14px; background: #f0f2f5; color: #1a1a2e; height: 100vh;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    /* ── Header ── */
+    header {
+      background: #1e40af; color: #fff;
+      padding: 0 20px; height: 52px;
+      display: flex; align-items: center; gap: 12px; flex-shrink: 0;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+    header h1 { font-size: 17px; font-weight: 700; flex: 1; letter-spacing: 0.5px; }
+    header .hbtn {
+      background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+      color: #fff; padding: 6px 14px; border-radius: 5px; cursor: pointer;
+      font-size: 13px; transition: background .15s;
+    }
+    header .hbtn:hover { background: rgba(255,255,255,0.25); }
+    #csv-file { display: none; }
+
+    /* ── Layout ── */
+    #layout { display: flex; flex: 1; overflow: hidden; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      width: 290px; background: #fff; border-right: 1px solid #e2e8f0;
+      display: flex; flex-direction: column; flex-shrink: 0;
+    }
+    #sidebar-top { padding: 12px; border-bottom: 1px solid #e2e8f0; }
+    #search {
+      width: 100%; padding: 8px 10px; border: 1px solid #cbd5e1;
+      border-radius: 6px; font-size: 13px; outline: none;
+      transition: border-color .15s;
+    }
+    #search:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
+    #count { font-size: 11px; color: #94a3b8; margin-top: 6px; }
+    #new-btn {
+      margin: 10px 12px 4px; padding: 8px; background: #1e40af; color: #fff;
+      border: none; border-radius: 6px; cursor: pointer; font-size: 13px;
+      transition: background .15s;
+    }
+    #new-btn:hover { background: #1d3a9e; }
+    #clist { flex: 1; overflow-y: auto; }
+    .ci {
+      padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #f1f5f9;
+      transition: background .1s;
+    }
+    .ci:hover { background: #f8faff; }
+    .ci.active { background: #eff6ff; border-left: 3px solid #1e40af; padding-left: 11px; }
+    .ci .cn { font-weight: 600; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .ci .cs { font-size: 11px; color: #94a3b8; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #pager {
+      padding: 8px 10px; border-top: 1px solid #e2e8f0;
+      display: flex; align-items: center; justify-content: center; gap: 4px; flex-wrap: wrap;
+    }
+    .pbtn {
+      padding: 3px 9px; border: 1px solid #cbd5e1; border-radius: 4px;
+      background: #fff; cursor: pointer; font-size: 12px; color: #475569;
+      transition: background .1s;
+    }
+    .pbtn:hover:not(:disabled) { background: #f1f5f9; }
+    .pbtn.cur { background: #1e40af; color: #fff; border-color: #1e40af; }
+    .pbtn:disabled { opacity: 0.35; cursor: not-allowed; }
+    .pdot { font-size: 12px; color: #94a3b8; padding: 0 2px; }
+
+    /* ── Main ── */
+    #main { flex: 1; overflow-y: auto; padding: 20px; }
+    #empty {
+      height: 100%; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; color: #cbd5e1; gap: 12px;
+    }
+    #empty svg { opacity: 0.5; }
+    #empty p { font-size: 15px; }
+
+    /* ── Cards ── */
+    .card {
+      background: #fff; border-radius: 10px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08); margin-bottom: 20px; max-width: 860px;
+    }
+    .card-head {
+      padding: 14px 20px; border-bottom: 1px solid #f1f5f9;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .card-head h2 { font-size: 16px; font-weight: 700; flex: 1; }
+    .card-body { padding: 20px; }
+    .igrid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .iitem label {
+      font-size: 10px; font-weight: 600; color: #94a3b8;
+      text-transform: uppercase; letter-spacing: 0.8px; display: block; margin-bottom: 4px;
+    }
+    .iitem .val { font-size: 14px; color: #1e293b; }
+    .iitem .val a { color: #1e40af; text-decoration: none; }
+    .iitem .val a:hover { text-decoration: underline; }
+    .iitem .val.money { font-size: 18px; font-weight: 700; color: #1e40af; }
+
+    /* ── Buttons ── */
+    .btn {
+      padding: 7px 14px; border-radius: 6px; border: none;
+      cursor: pointer; font-size: 13px; font-family: inherit;
+      transition: background .15s, opacity .15s;
+    }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-primary { background: #1e40af; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #1d3a9e; }
+    .btn-danger { background: #dc2626; color: #fff; }
+    .btn-danger:hover:not(:disabled) { background: #b91c1c; }
+    .btn-outline { background: #fff; color: #475569; border: 1px solid #cbd5e1; }
+    .btn-outline:hover:not(:disabled) { background: #f8fafc; }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    /* ── Log add form ── */
+    .log-form {
+      background: #f8faff; border: 1px solid #e0eaff; border-radius: 8px;
+      padding: 14px; margin-bottom: 18px;
+    }
+    .log-form h3 { font-size: 12px; font-weight: 600; color: #64748b; margin-bottom: 10px; }
+    .frow { display: flex; gap: 10px; align-items: flex-end; }
+    .fg { flex: 1; }
+    .fg label { font-size: 12px; color: #64748b; display: block; margin-bottom: 4px; }
+    .fg input, .fg textarea {
+      width: 100%; padding: 7px 10px; border: 1px solid #cbd5e1;
+      border-radius: 6px; font-size: 13px; font-family: inherit; outline: none;
+      transition: border-color .15s;
+    }
+    .fg input:focus, .fg textarea:focus {
+      border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+    }
+    .fg textarea { resize: vertical; min-height: 62px; }
+
+    /* ── Log list ── */
+    .log-item {
+      display: flex; gap: 14px; padding: 11px 0;
+      border-bottom: 1px solid #f1f5f9; align-items: flex-start;
+    }
+    .log-item:last-child { border-bottom: none; }
+    .ltime { font-size: 12px; color: #94a3b8; white-space: nowrap; width: 130px; flex-shrink: 0; padding-top: 1px; }
+    .lmemo { flex: 1; font-size: 13px; line-height: 1.6; white-space: pre-wrap; color: #334155; }
+
+    /* ── Modal ── */
+    .overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+      display: flex; align-items: center; justify-content: center; z-index: 50;
+    }
+    .modal {
+      background: #fff; border-radius: 12px; padding: 26px;
+      width: 560px; max-height: 92vh; overflow-y: auto;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+    }
+    .modal h2 { font-size: 17px; margin-bottom: 20px; color: #1e293b; }
+    .mgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .mgrid .span2 { grid-column: 1 / -1; }
+    .mfoot { margin-top: 22px; display: flex; justify-content: flex-end; gap: 10px; }
+
+    /* ── Toast ── */
+    #toast {
+      position: fixed; bottom: 22px; right: 22px;
+      background: #1e293b; color: #fff; padding: 10px 18px;
+      border-radius: 8px; font-size: 13px; z-index: 200;
+      opacity: 0; transition: opacity .25s; pointer-events: none;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+    }
+    #toast.show { opacity: 1; }
+    #toast.ok { background: #15803d; }
+    #toast.err { background: #dc2626; }
+
+    .spin { text-align: center; padding: 36px; color: #94a3b8; font-size: 13px; }
+    .none-msg { text-align: center; padding: 28px; color: #94a3b8; font-size: 13px; }
+
+    /* ── Import progress overlay ── */
+    #import-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+      display: flex; align-items: center; justify-content: center; z-index: 150;
+    }
+    .import-box {
+      background: #fff; border-radius: 12px; padding: 30px 40px;
+      text-align: center; box-shadow: 0 8px 32px rgba(0,0,0,0.2); min-width: 300px;
+    }
+    .import-box h3 { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: #1e293b; }
+    .prog-bar { height: 8px; background: #e2e8f0; border-radius: 4px; overflow: hidden; margin-bottom: 10px; }
+    .prog-fill { height: 100%; background: #1e40af; border-radius: 4px; transition: width .3s ease; }
+    .import-box p { font-size: 13px; color: #64748b; }
+
+    /* ── 電話記録一覧 ── */
+    .alog-item {
+      display: flex; gap: 12px; padding: 11px 20px;
+      border-bottom: 1px solid #f1f5f9; align-items: flex-start;
+      transition: background .1s;
+    }
+    .alog-item:hover { background: #f8faff; }
+    .alog-co {
+      font-size: 12px; font-weight: 600; color: #1e40af;
+      cursor: pointer; width: 160px; flex-shrink: 0; padding-top: 1px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .alog-co:hover { text-decoration: underline; }
+    .alog-time { font-size: 12px; color: #94a3b8; width: 130px; flex-shrink: 0; padding-top: 1px; white-space: nowrap; }
+    .alog-memo { flex: 1; font-size: 13px; color: #334155; white-space: pre-wrap; line-height: 1.5; }
+    .sort-btn { padding: 4px 10px; border: 1px solid #cbd5e1; border-radius: 4px; background: #fff; cursor: pointer; font-size: 12px; color: #475569; }
+    .sort-btn:hover { background: #f1f5f9; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>📦 SD 顧客管理</h1>
+  <button class="hbtn" onclick="showAllLogs()">電話記録一覧</button>
+  <button class="hbtn" onclick="triggerImport()">CSVインポート</button>
+  <input type="file" id="csv-file" accept=".csv">
+  <button class="hbtn" onclick="exportCSV()">CSV出力</button>
+  <button class="hbtn" onclick="runDiag()" style="background:rgba(255,200,0,0.25);border-color:rgba(255,200,0,0.6)">接続確認</button>
+</header>
+
+<div id="layout">
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div id="sidebar-top">
+      <input type="text" id="search" placeholder="会社名・担当者名・会員番号で検索…" oninput="onSearch(this.value)">
+      <div id="count"></div>
+    </div>
+    <button id="new-btn" onclick="openModal(null)">＋ 新規顧客を追加</button>
+    <div id="clist"></div>
+    <div id="pager"></div>
+  </div>
+
+  <!-- Main -->
+  <div id="main">
+    <div id="empty">
+      <svg width="56" height="56" viewBox="0 0 24 24" fill="currentColor">
+        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/>
+      </svg>
+      <p>顧客を選択してください</p>
+    </div>
+    <div id="detail" style="display:none"></div>
+    <div id="alllogsview" style="display:none"></div>
+  </div>
+</div>
+
+<!-- Customer Modal -->
+<div id="cmodal" class="overlay" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2 id="mtitle">顧客情報</h2>
+    <div class="mgrid">
+      <div class="fg">
+        <label>SD会員番号</label>
+        <input id="f-mid" type="text" placeholder="例: SD123456">
+      </div>
+      <div class="fg">
+        <label>購入金額（過去1年）</label>
+        <input id="f-amt" type="number" placeholder="円" min="0">
+      </div>
+      <div class="fg span2">
+        <label>会社名／店舗名 <span style="color:#dc2626">*</span></label>
+        <input id="f-co" type="text">
+      </div>
+      <div class="fg">
+        <label>担当者名</label>
+        <input id="f-name" type="text">
+      </div>
+      <div class="fg">
+        <label>担当者名（フリガナ）</label>
+        <input id="f-kana" type="text">
+      </div>
+      <div class="fg">
+        <label>電話番号（担当）</label>
+        <input id="f-tel" type="tel" placeholder="03-0000-0000">
+      </div>
+      <div class="fg">
+        <label>携帯番号</label>
+        <input id="f-mob" type="tel" placeholder="090-0000-0000">
+      </div>
+      <div class="fg">
+        <label>最終購入日</label>
+        <input id="f-date" type="date">
+      </div>
+    </div>
+    <input type="hidden" id="f-id">
+    <div class="mfoot">
+      <button class="btn btn-outline" onclick="closeModal()">キャンセル</button>
+      <button class="btn btn-primary" id="save-btn" onclick="saveCustomer()">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="import-overlay" style="display:none">
+  <div class="import-box">
+    <h3>インポート中...</h3>
+    <div class="prog-bar"><div class="prog-fill" id="prog-fill" style="width:0%"></div></div>
+    <p id="prog-text">準備中...</p>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const GAS = 'https://script.google.com/macros/s/AKfycbyPlH-Zvz60x3yvRr4SwVdZ3UAnCL2I89iu0j96iOLngjYdKb4A2cWFgCwNok2W7rrD/exec';
+
+let allCusts = [], filtered = [], page = 1;
+const PER = 50;
+let selId = null;
+
+// 電話記録ソート・キャッシュ
+let logSortDesc = true;   // true=新しい順 false=古い順
+let currentLogs = [];
+let currentLogCid = null;
+// 電話記録一覧
+let allLogsData = [];
+let allLogSortDesc = true;
+let allLogQ = '';
+
+// ── API ──────────────────────────────────────────
+
+// GETリクエスト（読み取り系）
+async function api(params) {
+  const u = new URL(GAS);
+  for (const [k, v] of Object.entries(params)) u.searchParams.set(k, String(v));
+  const r = await fetch(u.toString(), { redirect: 'follow' });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const txt = await r.text();
+  try { return JSON.parse(txt); } catch { throw new Error('レスポンス解析エラー: ' + txt.slice(0, 200)); }
+}
+
+// POSTリクエスト（書き込み系・バッチ処理）
+async function apiPost(action, body) {
+  const u = new URL(GAS);
+  u.searchParams.set('action', action);
+  const r = await fetch(u.toString(), {
+    method: 'POST',
+    body: JSON.stringify(body),
+    redirect: 'follow',
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const txt = await r.text();
+  try { return JSON.parse(txt); } catch { throw new Error('レスポンス解析エラー: ' + txt.slice(0, 200)); }
+}
+
+// ── Init ─────────────────────────────────────────
+async function init() {
+  document.getElementById('clist').innerHTML = '<div class="spin">読み込み中…</div>';
+  try {
+    const d = await api({ action: 'getCustomers', _t: Date.now() });
+    allCusts = Array.isArray(d) ? d : (d.data || []);
+    applySearch(document.getElementById('search').value);
+  } catch(e) {
+    document.getElementById('clist').innerHTML = '<div class="none-msg" style="color:#dc2626">取得失敗。GAS URLを確認してください。</div>';
+    toast('データ取得に失敗しました', 'err');
+  }
+}
+
+// ── Search ───────────────────────────────────────
+let stimer;
+function onSearch(q) { clearTimeout(stimer); stimer = setTimeout(() => applySearch(q), 180); }
+
+function applySearch(q) {
+  const kw = q.trim().toLowerCase();
+  filtered = kw
+    ? allCusts.filter(c =>
+        str(c.company).includes(kw) || str(c.contactName).includes(kw) ||
+        str(c.contactKana).includes(kw) || str(c.memberId).includes(kw))
+    : [...allCusts];
+  page = 1;
+  renderSidebar();
+}
+
+// ── Sidebar ──────────────────────────────────────
+function renderSidebar() {
+  const total = filtered.length;
+  const pages = Math.max(1, Math.ceil(total / PER));
+  if (page > pages) page = pages;
+  const slice = filtered.slice((page - 1) * PER, page * PER);
+
+  document.getElementById('count').textContent = `${total}件`;
+
+  const list = document.getElementById('clist');
+  if (!slice.length) {
+    list.innerHTML = '<div class="none-msg">顧客が見つかりません</div>';
+  } else {
+    list.innerHTML = slice.map(c => `
+      <div class="ci${c.id === selId ? ' active' : ''}" onclick="selectCustomer('${esc(c.id)}')">
+        <div class="cn">${esc(c.company || '（会社名なし）')}</div>
+        <div class="cs">${[c.memberId, c.contactName].filter(Boolean).map(esc).join(' · ')}</div>
+      </div>`).join('');
+  }
+  renderPager(pages);
+}
+
+function renderPager(pages) {
+  const el = document.getElementById('pager');
+  if (pages <= 1) { el.innerHTML = ''; return; }
+
+  const nums = new Set([1, pages, page]);
+  for (let i = Math.max(1, page - 1); i <= Math.min(pages, page + 1); i++) nums.add(i);
+  const sorted = [...nums].sort((a, b) => a - b);
+
+  let h = `<button class="pbtn" onclick="goPage(${page - 1})" ${page === 1 ? 'disabled' : ''}>‹</button>`;
+  let prev = 0;
+  for (const n of sorted) {
+    if (prev && n - prev > 1) h += '<span class="pdot">…</span>';
+    h += `<button class="pbtn${n === page ? ' cur' : ''}" onclick="goPage(${n})">${n}</button>`;
+    prev = n;
+  }
+  h += `<button class="pbtn" onclick="goPage(${page + 1})" ${page === pages ? 'disabled' : ''}>›</button>`;
+  el.innerHTML = h;
+}
+
+function goPage(n) { page = n; renderSidebar(); }
+
+// ── Detail ───────────────────────────────────────
+async function selectCustomer(id) {
+  selId = id;
+  renderSidebar();
+  const c = allCusts.find(x => x.id === id);
+  if (!c) return;
+
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('alllogsview').style.display = 'none';
+  const det = document.getElementById('detail');
+  det.style.display = 'block';
+  det.innerHTML = `
+    <div class="card">
+      <div class="card-head">
+        <h2>${esc(c.company || '（会社名なし）')}</h2>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline btn-sm" onclick="openModal('${esc(c.id)}')">編集</button>
+          <button class="btn btn-danger btn-sm" onclick="deleteCustomer('${esc(c.id)}')">削除</button>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="igrid">
+          <div class="iitem"><label>SD会員番号</label><div class="val">${esc(c.memberId || '—')}</div></div>
+          <div class="iitem"><label>購入金額（過去1年）</label>
+            <div class="val money">${c.purchaseAmount ? '¥' + Number(c.purchaseAmount).toLocaleString() : '—'}</div></div>
+          <div class="iitem"><label>担当者名</label><div class="val">${esc(c.contactName || '—')}</div></div>
+          <div class="iitem"><label>担当者名（フリガナ）</label><div class="val">${esc(c.contactKana || '—')}</div></div>
+          <div class="iitem"><label>電話番号（担当）</label>
+            <div class="val">${c.phone ? `<a href="tel:${esc(c.phone)}">${esc(c.phone)}</a>` : '—'}</div></div>
+          <div class="iitem"><label>携帯番号</label>
+            <div class="val">${c.mobile ? `<a href="tel:${esc(c.mobile)}">${esc(c.mobile)}</a>` : '—'}</div></div>
+          <div class="iitem"><label>最終購入日</label><div class="val">${esc(fmtDate(c.lastPurchase) || '—')}</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+          <h2>電話記録</h2>
+          <button class="sort-btn" id="log-sort-btn" onclick="toggleLogSort('${esc(c.id)}')">新しい順 ↓</button>
+        </div>
+      <div class="card-body">
+        <div class="log-form">
+          <h3>新しい記録を追加</h3>
+          <div class="frow">
+            <div class="fg" style="flex:0 0 190px">
+              <label>日時</label>
+              <input type="datetime-local" id="log-dt" value="${nowDT()}">
+            </div>
+            <div class="fg">
+              <label>メモ</label>
+              <textarea id="log-memo" placeholder="通話内容・メモ…"></textarea>
+            </div>
+            <button class="btn btn-primary" onclick="addLog('${esc(c.id)}')">追加</button>
+          </div>
+        </div>
+        <div id="loglist"><div class="spin">読み込み中…</div></div>
+      </div>
+    </div>`;
+
+  loadLogs(id);
+}
+
+// ── Logs ─────────────────────────────────────────
+async function loadLogs(cid) {
+  currentLogCid = cid;
+  try {
+    const d = await api({ action: 'getLogs', customerId: cid, _t: Date.now() });
+    currentLogs = Array.isArray(d) ? d : (d.data || []);
+    renderLogs(cid, currentLogs);
+  } catch {
+    const el = document.getElementById('loglist');
+    if (el) el.innerHTML = '<div style="color:#dc2626;font-size:13px;padding:8px">記録の取得に失敗しました</div>';
+  }
+}
+
+function renderLogs(cid, logs) {
+  const el = document.getElementById('loglist');
+  if (!el) return;
+  if (!logs.length) { el.innerHTML = '<div class="none-msg">電話記録はありません</div>'; return; }
+
+  const sorted = [...logs].sort((a, b) => {
+    const d = new Date(a.datetime) - new Date(b.datetime);
+    return logSortDesc ? -d : d;
+  });
+
+  // ソートボタンのラベル更新
+  const btn = document.getElementById('log-sort-btn');
+  if (btn) btn.textContent = logSortDesc ? '新しい順 ↓' : '古い順 ↑';
+
+  el.innerHTML = sorted.map(l => `
+    <div class="log-item">
+      <div class="ltime">${esc(fmtDT(l.datetime))}</div>
+      <div class="lmemo">${esc(l.memo || '')}</div>
+      <div><button class="btn btn-danger btn-sm" onclick="deleteLog('${esc(l.id)}','${esc(cid)}')">削除</button></div>
+    </div>`).join('');
+}
+
+function toggleLogSort(cid) {
+  logSortDesc = !logSortDesc;
+  renderLogs(cid, currentLogs);
+}
+
+async function addLog(cid) {
+  const dt = document.getElementById('log-dt').value;
+  const memo = document.getElementById('log-memo').value.trim();
+  if (!memo) { toast('メモを入力してください', 'err'); return; }
+  try {
+    await api({ action: 'addLog', data: JSON.stringify({ customerId: cid, datetime: dt, memo }) });
+    toast('記録を追加しました', 'ok');
+    document.getElementById('log-memo').value = '';
+    document.getElementById('log-dt').value = nowDT();
+    loadLogs(cid);
+  } catch { toast('追加に失敗しました', 'err'); }
+}
+
+async function deleteLog(lid, cid) {
+  if (!confirm('この記録を削除しますか？')) return;
+  try {
+    await api({ action: 'deleteLog', id: lid });
+    toast('記録を削除しました', 'ok');
+    loadLogs(cid);
+  } catch { toast('削除に失敗しました', 'err'); }
+}
+
+// ── Customer Modal ───────────────────────────────
+function openModal(id) {
+  document.getElementById('mtitle').textContent = id ? '顧客情報を編集' : '新規顧客を追加';
+  const fields = ['f-id','f-mid','f-co','f-name','f-kana','f-tel','f-mob','f-date','f-amt'];
+  fields.forEach(f => document.getElementById(f).value = '');
+
+  if (id) {
+    const c = allCusts.find(x => x.id === id);
+    if (c) {
+      document.getElementById('f-id').value   = c.id || '';
+      document.getElementById('f-mid').value  = c.memberId || '';
+      document.getElementById('f-co').value   = c.company || '';
+      document.getElementById('f-name').value = c.contactName || '';
+      document.getElementById('f-kana').value = c.contactKana || '';
+      document.getElementById('f-tel').value  = c.phone || '';
+      document.getElementById('f-mob').value  = c.mobile || '';
+      document.getElementById('f-date').value = c.lastPurchase || '';
+      document.getElementById('f-amt').value  = c.purchaseAmount || '';
+    }
+  }
+  document.getElementById('cmodal').style.display = 'flex';
+}
+
+function closeModal() { document.getElementById('cmodal').style.display = 'none'; }
+
+async function saveCustomer() {
+  const co = document.getElementById('f-co').value.trim();
+  if (!co) { toast('会社名を入力してください', 'err'); return; }
+
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  const data = {
+    id:            document.getElementById('f-id').value,
+    memberId:      document.getElementById('f-mid').value.trim(),
+    company:       co,
+    contactName:   document.getElementById('f-name').value.trim(),
+    contactKana:   document.getElementById('f-kana').value.trim(),
+    phone:         document.getElementById('f-tel').value.trim(),
+    mobile:        document.getElementById('f-mob').value.trim(),
+    lastPurchase:  document.getElementById('f-date').value,
+    purchaseAmount:document.getElementById('f-amt').value,
+  };
+  try {
+    const res = await api({ action: 'saveCustomer', data: JSON.stringify(data) });
+    toast(data.id ? '顧客情報を更新しました' : '顧客を追加しました', 'ok');
+    closeModal();
+    const newId = (res && res.id) ? res.id : data.id;
+    await init();
+    if (newId) { selId = newId; selectCustomer(newId); }
+  } catch { toast('保存に失敗しました', 'err'); }
+  finally { btn.disabled = false; }
+}
+
+async function deleteCustomer(id) {
+  const c = allCusts.find(x => x.id === id);
+  if (!confirm(`「${c?.company || ''}」を削除しますか？\nこの操作は取り消せません。`)) return;
+  try {
+    await api({ action: 'deleteCustomer', id });
+    toast('顧客を削除しました', 'ok');
+    selId = null;
+    document.getElementById('detail').style.display = 'none';
+    document.getElementById('empty').style.display = 'flex';
+    await init();
+  } catch { toast('削除に失敗しました', 'err'); }
+}
+
+// ── CSV Import ───────────────────────────────────
+function triggerImport() { document.getElementById('csv-file').click(); }
+
+document.getElementById('csv-file').addEventListener('change', async e => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+
+  const overlay  = document.getElementById('import-overlay');
+  const fill     = document.getElementById('prog-fill');
+  const progText = document.getElementById('prog-text');
+
+  try {
+    const text = await readFile(file);
+    const rows = parseCSV(text);
+    if (rows.length < 2) { toast('CSVにデータがありません', 'err'); return; }
+
+    const headers = rows[0].map(h => h.trim());
+
+    // CSVヘッダーをGASフィールド名にマッピング
+    const records = rows.slice(1)
+      .filter(r => r.some(c => c.trim()))
+      .map(row => {
+        const r = {};
+        headers.forEach((h, i) => r[h] = (row[i] || '').trim());
+        return {
+          id:            '',
+          memberId:      r['SD会員番号']         || r['会員番号']    || '',
+          company:       r['会社名／店舗名']      || r['会社名']      || r['店舗名'] || '',
+          contactName:   r['担当者名']            || '',
+          contactKana:   r['担当者名（フリガナ）'] || r['担当者フリガナ'] || r['フリガナ'] || '',
+          phone:         r['電話番号（担当）'] || r['電話番号(担当)'] || r['担当電話番号'] || r['電話番号'] || r['TEL'] || r['tel'] || '',
+          mobile:        r['携帯番号']            || r['携帯']        || '',
+          lastPurchase:  r['最終購入日']          || '',
+          purchaseAmount:r['購入金額（過去1年）'] || r['購入金額（過去一年）'] || r['購入金額(過去1年)'] || r['購入金額(過去一年)'] || r['購入金額'] || r['金額'] || '',
+        };
+      })
+      .filter(obj => obj.company || obj.memberId); // 会社名もmemberIdもない行は除外
+
+    if (!records.length) { toast('有効なデータが見つかりません', 'err'); return; }
+    if (!confirm(`${records.length}件をインポートします。\nSD会員番号が一致する場合は上書きされます。`)) return;
+
+    // プログレスオーバーレイ表示
+    overlay.style.display = 'flex';
+    fill.style.width = '0%';
+
+    const CHUNK = 200; // 1リクエストあたりの件数
+    const total = records.length;
+    let added = 0, updated = 0, failed = 0;
+
+    for (let i = 0; i < total; i += CHUNK) {
+      const chunk = records.slice(i, i + CHUNK);
+      const done  = Math.min(i + CHUNK, total);
+      progText.textContent = `${done} / ${total} 件処理中...`;
+      fill.style.width = Math.round(i / total * 100) + '%';
+
+      try {
+        const res = await apiPost('batchSaveCustomer', chunk);
+        if (res && res.ok) {
+          added   += res.added   || 0;
+          updated += res.updated || 0;
+        } else {
+          // GASがエラーを返した場合（ok: false）
+          console.error('GASエラー:', res?.error, '対象チャンク:', i, '〜', done);
+          failed += chunk.length;
+        }
+      } catch(err) {
+        console.error('通信エラー:', err, '対象チャンク:', i, '〜', done);
+        failed += chunk.length;
+      }
+    }
+
+    fill.style.width = '100%';
+    overlay.style.display = 'none';
+
+    const msg = `インポート完了: 新規${added}件、更新${updated}件${failed ? `、失敗${failed}件` : ''}`;
+    toast(msg, failed === total ? 'err' : 'ok');
+    await init();
+
+  } catch(err) {
+    overlay.style.display = 'none';
+    toast('CSV読み込みに失敗しました', 'err');
+    console.error(err);
+  }
+});
+
+function readFile(file) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = e => {
+      const buf = e.target.result;
+      const u8 = new Uint8Array(buf);
+      let enc = 'utf-8';
+      if (u8[0] === 0xEF && u8[1] === 0xBB && u8[2] === 0xBF) {
+        enc = 'utf-8';
+      } else {
+        for (let i = 0; i < Math.min(u8.length, 4096); i++) {
+          const b = u8[i];
+          if ((b >= 0x81 && b <= 0x9F) || (b >= 0xE0 && b <= 0xFC)) { enc = 'shift-jis'; break; }
+        }
+      }
+      try { res(new TextDecoder(enc).decode(buf)); }
+      catch { res(new TextDecoder('utf-8', { fatal: false }).decode(buf)); }
+    };
+    fr.onerror = rej;
+    fr.readAsArrayBuffer(file);
+  });
+}
+
+function parseCSV(text) {
+  const rows = []; let row = [], cell = '', inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"' && text[i+1] === '"') { cell += '"'; i++; }
+      else if (c === '"') inQ = false;
+      else cell += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i+1] === '\n') i++;
+        row.push(cell); cell = '';
+        if (row.some(x => x)) rows.push(row);
+        row = [];
+      } else cell += c;
+    }
+  }
+  if (row.length || cell) { row.push(cell); if (row.some(x => x)) rows.push(row); }
+  return rows;
+}
+
+// ── 電話記録一覧 ─────────────────────────────────
+
+async function showAllLogs() {
+  selId = null;
+  renderSidebar();
+  document.getElementById('empty').style.display = 'none';
+  document.getElementById('detail').style.display = 'none';
+  const view = document.getElementById('alllogsview');
+  view.style.display = 'block';
+  view.innerHTML = `
+    <div class="card" style="max-width:900px">
+      <div class="card-head" style="flex-wrap:wrap;gap:10px">
+        <h2 style="flex:none">電話記録一覧</h2>
+        <input id="alog-search" type="text" placeholder="会社名・メモで検索…"
+          oninput="filterAllLogs(this.value)"
+          style="flex:1;min-width:160px;padding:6px 10px;border:1px solid #cbd5e1;border-radius:6px;font-size:13px;outline:none">
+        <span id="alog-count" style="font-size:12px;color:#94a3b8;align-self:center"></span>
+        <button class="sort-btn" id="alog-sort-btn" onclick="toggleAllLogSort()">新しい順 ↓</button>
+      </div>
+      <div class="card-body" style="padding:0">
+        <div id="alog-list"><div class="spin">読み込み中…</div></div>
+      </div>
+    </div>`;
+
+  try {
+    const d = await api({ action: 'getAllLogs', _t: Date.now() });
+    allLogsData = Array.isArray(d) ? d : [];
+    allLogQ = '';
+    renderAllLogs();
+  } catch(e) {
+    document.getElementById('alog-list').innerHTML =
+      '<div style="padding:20px;color:#dc2626;font-size:13px">記録の取得に失敗しました</div>';
+  }
+}
+
+function filterAllLogs(q) {
+  allLogQ = q.trim().toLowerCase();
+  renderAllLogs();
+}
+
+function toggleAllLogSort() {
+  allLogSortDesc = !allLogSortDesc;
+  const btn = document.getElementById('alog-sort-btn');
+  if (btn) btn.textContent = allLogSortDesc ? '新しい順 ↓' : '古い順 ↑';
+  renderAllLogs();
+}
+
+function renderAllLogs() {
+  const el = document.getElementById('alog-list');
+  if (!el) return;
+
+  let list = allLogQ
+    ? allLogsData.filter(l =>
+        str(l.company).includes(allLogQ) || str(l.memo).includes(allLogQ))
+    : [...allLogsData];
+
+  list.sort((a, b) => {
+    const d = new Date(a.datetime) - new Date(b.datetime);
+    return allLogSortDesc ? -d : d;
+  });
+
+  const countEl = document.getElementById('alog-count');
+  if (countEl) countEl.textContent = `${list.length}件`;
+
+  if (!list.length) {
+    el.innerHTML = '<div class="none-msg">電話記録がありません</div>';
+    return;
+  }
+
+  el.innerHTML = list.map(l => `
+    <div class="alog-item">
+      <div class="alog-time">${esc(fmtDT(l.datetime))}</div>
+      <div class="alog-co" onclick="selectCustomer('${esc(l.customerId)}')" title="${esc(l.company)}">${esc(l.company || '—')}</div>
+      <div class="alog-memo">${esc(l.memo || '')}</div>
+      <div><button class="btn btn-danger btn-sm" onclick="deleteLogFromAll('${esc(l.id)}')">削除</button></div>
+    </div>`).join('');
+}
+
+async function deleteLogFromAll(logId) {
+  if (!confirm('この記録を削除しますか？')) return;
+  try {
+    await api({ action: 'deleteLog', id: logId });
+    allLogsData = allLogsData.filter(l => l.id !== logId);
+    renderAllLogs();
+    toast('記録を削除しました', 'ok');
+  } catch { toast('削除に失敗しました', 'err'); }
+}
+
+// ── CSV Export ───────────────────────────────────
+function exportCSV() {
+  if (!allCusts.length) { toast('エクスポートするデータがありません', 'err'); return; }
+  const H = ['SD会員番号','会社名／店舗名','担当者名','担当者名（フリガナ）','電話番号（担当）','携帯番号','最終購入日','購入金額（過去1年）'];
+  const rows = allCusts.map(c => [
+    c.memberId, c.company, c.contactName, c.contactKana,
+    c.phone, c.mobile, c.lastPurchase, c.purchaseAmount
+  ].map(v => {
+    const s = String(v ?? '');
+    return (s.includes(',') || s.includes('"') || s.includes('\n')) ? `"${s.replace(/"/g,'""')}"` : s;
+  }).join(','));
+
+  const csv = '﻿' + [H.join(','), ...rows].join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+  a.download = `顧客リスト_${ymd()}.csv`;
+  a.click();
+  toast('CSVをエクスポートしました', 'ok');
+}
+
+// ── Utilities ────────────────────────────────────
+function esc(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function str(s) { return String(s ?? '').toLowerCase(); }
+
+function nowDT() {
+  const d = new Date(), p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function ymd() {
+  const d = new Date(), p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}`;
+}
+function fmtDate(s) {
+  if (!s) return '';
+  // YYYY/MM/DD または YYYY-MM-DD 形式は変換不要でそのまま整形
+  const iso = String(s).match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+  if (iso) return `${iso[1]}/${iso[2].padStart(2,'0')}/${iso[3].padStart(2,'0')}`;
+  // Google Sheetsが日付オブジェクトを文字列化したもの（英語表記）をパース
+  const d = new Date(s);
+  if (isNaN(d)) return String(s);
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())}`;
+}
+function fmtDT(s) {
+  if (!s) return '';
+  const d = new Date(s);
+  if (isNaN(d)) return s;
+  const p = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}/${p(d.getMonth()+1)}/${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+let tTimer;
+function toast(msg, type = '') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = ['show', type].filter(Boolean).join(' ');
+  clearTimeout(tTimer);
+  tTimer = setTimeout(() => el.className = '', 3200);
+}
+
+// Start
+init();
+</script>
+</body>
+</html>
