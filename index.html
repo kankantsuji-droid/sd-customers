@@ -249,9 +249,46 @@
       .alog-time { width: auto; flex-basis: 100%; order: -1; }
       .alog-co { width: auto; }
     }
+  /* ── Auth ── */
+  #auth-overlay {
+    position: fixed; inset: 0; background: #1e40af;
+    display: flex; align-items: center; justify-content: center; z-index: 9999;
+  }
+  .auth-box {
+    background: #fff; border-radius: 14px; padding: 40px 36px;
+    width: 320px; text-align: center;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .auth-box h2 { font-size: 18px; font-weight: 700; color: #1e293b; margin-bottom: 6px; }
+  .auth-box p { font-size: 13px; color: #94a3b8; margin-bottom: 24px; }
+  .auth-box input {
+    width: 100%; padding: 10px 14px; border: 1px solid #cbd5e1;
+    border-radius: 8px; font-size: 15px; outline: none;
+    text-align: center; letter-spacing: 2px; margin-bottom: 14px;
+    transition: border-color .15s;
+  }
+  .auth-box input:focus { border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.15); }
+  .auth-box button {
+    width: 100%; padding: 11px; background: #1e40af; color: #fff;
+    border: none; border-radius: 8px; font-size: 14px; font-weight: 600;
+    cursor: pointer; transition: background .15s;
+  }
+  .auth-box button:hover { background: #1d3a9e; }
+  #auth-err { color: #dc2626; font-size: 13px; margin-top: 10px; min-height: 20px; }
   </style>
 </head>
 <body>
+
+<div id="auth-overlay">
+  <div class="auth-box">
+    <h2>📦 SD 顧客管理</h2>
+    <p>パスワードを入力してください</p>
+    <input type="password" id="auth-pw" placeholder="パスワード"
+      onkeydown="if(event.key==='Enter')checkAuth()">
+    <button onclick="checkAuth()">ログイン</button>
+    <div id="auth-err"></div>
+  </div>
+</div>
 
 <header>
   <h1>📦 SD 顧客管理</h1>
@@ -348,6 +385,25 @@
 <div id="toast"></div>
 
 <script>
+// ── Auth ─────────────────────────────────────────
+(function() {
+  if (sessionStorage.getItem('sd_auth') === '1') {
+    document.getElementById('auth-overlay').style.display = 'none';
+  }
+})();
+
+function checkAuth() {
+  const pw = document.getElementById('auth-pw').value;
+  if (pw === 'kankan2020') {
+    sessionStorage.setItem('sd_auth', '1');
+    document.getElementById('auth-overlay').style.display = 'none';
+  } else {
+    document.getElementById('auth-err').textContent = 'パスワードが違います';
+    document.getElementById('auth-pw').value = '';
+    document.getElementById('auth-pw').focus();
+  }
+}
+
 const GAS = 'https://script.google.com/macros/s/AKfycbyPlH-Zvz60x3yvRr4SwVdZ3UAnCL2I89iu0j96iOLngjYdKb4A2cWFgCwNok2W7rrD/exec';
 
 let allCusts = [], filtered = [], page = 1;
